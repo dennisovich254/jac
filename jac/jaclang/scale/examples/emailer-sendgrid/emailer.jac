@@ -9,11 +9,21 @@ API key is read from the SENDGRID_API_KEY env var. If unset, sends are
 logged and dropped (the server keeps running with email features off).
 """
 
+import base64;
 import logging;
 import os;
-import from jaclang.scale.emailer.emailer { Emailer }
+import from jaclang.scale.emailer.emailer { Emailer, EmailAttachment }
 import from sendgrid { SendGridAPIClient }
-import from sendgrid.helpers.mail { Mail }
+import from sendgrid.helpers.mail {
+    Mail,
+    Attachment,
+    ContentId,
+    Disposition,
+    FileContent,
+    FileName,
+    FileType,
+    ReplyTo
+}
 
 glob _logger = logging.getLogger("sendgrid-emailer");
 
@@ -40,7 +50,9 @@ obj SendGridEmailer(Emailer) {
         subject: str,
         body_text: str,
         body_html: (str | None) = None,
-        from_addr: (str | None) = None
+        from_addr: (str | None) = None,
+        reply_to: (str | None) = None,
+        attachments: (list[EmailAttachment] | None) = None
     ) -> bool {
         if self._client is None {
             return False;
@@ -62,6 +74,20 @@ obj SendGridEmailer(Emailer) {
                 to_emails=to_addr,
                 subject=subject,
                 plain_text_content=body_text
+            );
+        }
+        if reply_to {
+            msg.reply_to = ReplyTo(reply_to);
+        }
+        for att in attachments or [] {
+            msg.add_attachment(
+                Attachment(
+                    FileContent(base64.b64encode(att.content).decode('ascii')),
+                    FileName(att.filename),
+                    FileType(att.mime_type),
+                    Disposition('inline' if att.content_id else 'attachment'),
+                    ContentId(att.content_id) if att.content_id else None
+                )
             );
         }
         try {

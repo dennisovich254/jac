@@ -1,6 +1,9 @@
 import sys;
+import unittest.mock;
+import from email { message_from_string, policy }
+import from email.message { EmailMessage }
 import from pathlib { Path }
-import from jaclang.scale.emailer.emailer { Emailer }
+import from jaclang.scale.emailer.emailer { Emailer, EmailAttachment }
 import from jaclang.scale.emailer.factory { create as create_emailer, register }
 import from jaclang.server.identity.auth_tokens {
     AuthTokenStore,
@@ -20,7 +23,9 @@ obj _RecordingEmailer(Emailer) {
         subject: str,
         body_text: str,
         body_html: (str | None) = None,
-        from_addr: (str | None) = None
+        from_addr: (str | None) = None,
+        reply_to: (str | None) = None,
+        attachments: (list[EmailAttachment] | None) = None
     ) -> bool {
         self.sent.append(
             {
@@ -53,6 +58,89 @@ test "factory_builds_smtp_provider" {
     assert emailer.from_address == "noreply@example.com";
     assert emailer.host == "smtp.example.com";
     assert emailer.port == 587;
+}
+
+def _smtp_sent(
+    body_html: (str | None),
+    reply_to: (str | None),
+    attachments: (list[EmailAttachment] | None)
+) -> EmailMessage {
+    import from jaclang.scale.emailer.emailers { SMTPEmailer }
+    emailer = SMTPEmailer(
+        config={"smtp": {"host": "smtp.example.com", "use_tls": False}},
+        from_address="noreply@example.com"
+    );
+    with unittest.mock.patch("smtplib.SMTP") as smtp_cls {
+        assert emailer.send_email(
+            to_addr="user@x.y",
+            subject="Your tickets",
+            body_text="See attached.",
+            body_html=body_html,
+            reply_to=reply_to,
+            attachments=attachments
+        );
+        smtp = smtp_cls.return_value.__enter__.return_value;
+        (_, _, raw) = smtp.sendmail.call_args.args;
+    }
+    return message_from_string(raw, policy=policy.default);
+}
+
+test "smtp_plain_send_is_text_and_html_alternatives" {
+    msg = _smtp_sent("<p>See attached.</p>", None, None);
+    assert msg.get_content_type() == "multipart/alternative";
+    assert msg["Reply-To"] is None;
+    assert msg.get_body(preferencelist=("plain", )).get_content().strip()
+        == "See attached.";
+    assert "<p>See attached.</p>"
+        in msg.get_body(preferencelist=("html", )).get_content();
+}
+
+test "smtp_sets_reply_to_and_sends_inline_and_attached_files" {
+    msg = _smtp_sent(
+        '<img src="cid:qr-1">',
+        "Box Office <boxoffice@example.com>",
+        [
+            EmailAttachment(
+                filename="qr.png",
+                content=b"PNG-BYTES",
+                mime_type="image/png",
+                content_id="qr-1"
+            ),
+            EmailAttachment(
+                filename="ticket.pdf", content=b"PDF-BYTES", mime_type="application/pdf"
+            )
+        ]
+    );
+    assert msg["Reply-To"] == "Box Office <boxoffice@example.com>";
+    assert msg.get_content_type() == "multipart/mixed";
+    related = msg.get_body(preferencelist=("related", ));
+    assert related is not None;
+    image = [
+        p
+        for p in related.iter_parts()
+        if p.get_content_type() == "image/png"
+    ][0];
+    assert image["Content-ID"] == "<qr-1>";
+    assert image.get_content() == b"PNG-BYTES";
+    attached = list(msg.iter_attachments());
+    assert [a.get_filename() for a in attached] == ["ticket.pdf"];
+    assert attached[0].get_content() == b"PDF-BYTES";
+}
+
+test "smtp_inline_file_without_html_is_attached" {
+    msg = _smtp_sent(
+        None,
+        None,
+        [
+            EmailAttachment(
+                filename="qr.png",
+                content=b"PNG-BYTES",
+                mime_type="image/png",
+                content_id="qr-1"
+            )
+        ]
+    );
+    assert [a.get_filename() for a in msg.iter_attachments()] == ["qr.png"];
 }
 
 test "factory_uses_registered_name" {

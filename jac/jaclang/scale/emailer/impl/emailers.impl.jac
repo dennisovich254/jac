@@ -17,7 +17,9 @@ impl SMTPEmailer.send_email(
     subject: str,
     body_text: str,
     body_html: (str | None) = None,
-    from_addr: (str | None) = None
+    from_addr: (str | None) = None,
+    reply_to: (str | None) = None,
+    attachments: (list[EmailAttachment] | None) = None
 ) -> bool {
     if not self.enabled {
         logger.warning("SMTPEmailer is disabled, skipping send to %s", to_addr);
@@ -28,13 +30,34 @@ impl SMTPEmailer.send_email(
         logger.error("SMTPEmailer: no from_address configured");
         return False;
     }
-    msg = MIMEMultipart('alternative');
+    msg = EmailMessage();
     msg['Subject'] = subject;
     msg['From'] = sender;
     msg['To'] = to_addr;
-    msg.attach(MIMEText(body_text, 'plain', 'utf-8'));
+    if reply_to {
+        msg['Reply-To'] = reply_to;
+    }
+    msg.set_content(body_text);
     if body_html {
-        msg.attach(MIMEText(body_html, 'html', 'utf-8'));
+        msg.add_alternative(body_html, subtype='html');
+    }
+    html_part = msg.get_body(preferencelist=('html', ));
+    for att in attachments or [] {
+        (maintype, _, subtype) = att.mime_type.partition('/');
+        if att.content_id and html_part is not None {
+            html_part.add_related(
+                att.content,
+                maintype=maintype,
+                subtype=subtype,
+                cid=f"<{att.content_id}>",
+                filename=att.filename,
+                disposition='inline'
+            );
+        } else {
+            msg.add_attachment(
+                att.content, maintype=maintype, subtype=subtype, filename=att.filename
+            );
+        }
     }
     try {
         with smtplib.SMTP(self.host, self.port, timeout=self.timeout) as smtp {
