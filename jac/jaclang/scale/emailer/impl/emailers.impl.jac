@@ -30,35 +30,9 @@ impl SMTPEmailer.send_email(
         logger.error("SMTPEmailer: no from_address configured");
         return False;
     }
-    msg = EmailMessage();
-    msg['Subject'] = subject;
-    msg['From'] = sender;
-    msg['To'] = to_addr;
-    if reply_to {
-        msg['Reply-To'] = reply_to;
-    }
-    msg.set_content(body_text);
-    if body_html {
-        msg.add_alternative(body_html, subtype='html');
-    }
-    html_part = msg.get_body(preferencelist=('html', ));
-    for att in attachments or [] {
-        (maintype, _, subtype) = att.mime_type.partition('/');
-        if att.content_id and html_part is not None {
-            html_part.add_related(
-                att.content,
-                maintype=maintype,
-                subtype=subtype,
-                cid=f"<{att.content_id}>",
-                filename=att.filename,
-                disposition='inline'
-            );
-        } else {
-            msg.add_attachment(
-                att.content, maintype=maintype, subtype=subtype, filename=att.filename
-            );
-        }
-    }
+    msg = self._build_message(
+        sender, to_addr, subject, body_text, body_html, reply_to, attachments or []
+    );
     try {
         with smtplib.SMTP(self.host, self.port, timeout=self.timeout) as smtp {
             smtp.ehlo();
@@ -77,4 +51,45 @@ impl SMTPEmailer.send_email(
         logger.error("SMTPEmailer: failed to send to %s: %s", to_addr, e);
         return False;
     }
+}
+
+impl SMTPEmailer._build_message(
+    sender: str,
+    to_addr: str,
+    subject: str,
+    body_text: str,
+    body_html: (str | None),
+    reply_to: (str | None),
+    attachments: list[EmailAttachment]
+) -> EmailMessage {
+    msg = EmailMessage();
+    msg['Subject'] = subject;
+    msg['From'] = sender;
+    msg['To'] = to_addr;
+    if reply_to {
+        msg['Reply-To'] = reply_to;
+    }
+    msg.set_content(body_text);
+    if body_html {
+        msg.add_alternative(body_html, subtype='html');
+    }
+    html_part = msg.get_body(preferencelist=('html', ));
+    for att in attachments {
+        (maintype, _, subtype) = att.mime_type.partition('/');
+        if att.content_id and html_part is not None {
+            html_part.add_related(
+                att.content,
+                maintype=maintype,
+                subtype=subtype,
+                cid=f"<{att.content_id}>",
+                filename=att.filename,
+                disposition='inline'
+            );
+        } else {
+            msg.add_attachment(
+                att.content, maintype=maintype, subtype=subtype, filename=att.filename
+            );
+        }
+    }
+    return msg;
 }

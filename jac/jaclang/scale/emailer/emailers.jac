@@ -25,4 +25,13 @@ obj SMTPEmailer(Emailer) {
     ) -> bool;
 
     override def is_ready -> bool;
+    def _build_message(
+        sender: str,
+        to_addr: str,
+        subject: str,
+        body_text: str,
+        body_html: (str | None),
+        reply_to: (str | None),
+        attachments: list[EmailAttachment]
+    ) -> EmailMessage;
 }

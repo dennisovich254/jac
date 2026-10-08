@@ -1,5 +1,4 @@
 import sys;
-import unittest.mock;
 import from email { message_from_string, policy }
 import from email.message { EmailMessage }
 import from pathlib { Path }
@@ -60,33 +59,29 @@ test "factory_builds_smtp_provider" {
     assert emailer.port == 587;
 }
 
-def _smtp_sent(
-    body_html: (str | None),
-    reply_to: (str | None),
-    attachments: (list[EmailAttachment] | None)
+def _smtp_message(
+    body_html: (str | None), reply_to: (str | None), attachments: list[EmailAttachment]
 ) -> EmailMessage {
+    # The message SMTPEmailer would send, read back as a mail client reads it.
     import from jaclang.scale.emailer.emailers { SMTPEmailer }
     emailer = SMTPEmailer(
-        config={"smtp": {"host": "smtp.example.com", "use_tls": False}},
+        config={"smtp": {"host": "smtp.example.com"}},
         from_address="noreply@example.com"
     );
-    with unittest.mock.patch("smtplib.SMTP") as smtp_cls {
-        assert emailer.send_email(
-            to_addr="user@x.y",
-            subject="Your tickets",
-            body_text="See attached.",
-            body_html=body_html,
-            reply_to=reply_to,
-            attachments=attachments
-        );
-        smtp = smtp_cls.return_value.__enter__.return_value;
-        (_, _, raw) = smtp.sendmail.call_args.args;
-    }
-    return message_from_string(raw, policy=policy.default);
+    built = emailer._build_message(
+        "noreply@example.com",
+        "user@x.y",
+        "Your tickets",
+        "See attached.",
+        body_html,
+        reply_to,
+        attachments
+    );
+    return message_from_string(built.as_string(), policy=policy.default);
 }
 
-test "smtp_plain_send_is_text_and_html_alternatives" {
-    msg = _smtp_sent("<p>See attached.</p>", None, None);
+test "smtp_plain_message_is_text_and_html_alternatives" {
+    msg = _smtp_message("<p>See attached.</p>", None, []);
     assert msg.get_content_type() == "multipart/alternative";
     assert msg["Reply-To"] is None;
     assert msg.get_body(preferencelist=("plain", )).get_content().strip()
@@ -95,8 +90,8 @@ test "smtp_plain_send_is_text_and_html_alternatives" {
         in msg.get_body(preferencelist=("html", )).get_content();
 }
 
-test "smtp_sets_reply_to_and_sends_inline_and_attached_files" {
-    msg = _smtp_sent(
+test "smtp_message_has_reply_to_and_inline_and_attached_files" {
+    msg = _smtp_message(
         '<img src="cid:qr-1">',
         "Box Office <boxoffice@example.com>",
         [
@@ -128,7 +123,7 @@ test "smtp_sets_reply_to_and_sends_inline_and_attached_files" {
 }
 
 test "smtp_inline_file_without_html_is_attached" {
-    msg = _smtp_sent(
+    msg = _smtp_message(
         None,
         None,
         [

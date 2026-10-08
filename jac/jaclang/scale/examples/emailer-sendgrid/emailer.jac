@@ -85,8 +85,10 @@ obj SendGridEmailer(Emailer) {
                     FileContent(base64.b64encode(att.content).decode('ascii')),
                     FileName(att.filename),
                     FileType(att.mime_type),
-                    Disposition('inline' if att.content_id else 'attachment'),
-                    ContentId(att.content_id) if att.content_id else None
+                    Disposition(
+                        'inline' if att.content_id and body_html else 'attachment'
+                    ),
+                    ContentId(att.content_id) if att.content_id and body_html else None
                 )
             );
         }

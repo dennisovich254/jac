@@ -1072,26 +1072,28 @@ timeout  = 10.0
 `send_email` also takes an optional `reply_to` address and a list of `EmailAttachment`s. An attachment with a `content_id` is shown inside the HTML body, where `cid:<content_id>` refers to it (an inline image, such as a QR code); one without is attached as a separate file. With no HTML body, every attachment is attached.
 
 ```jac
-import from jaclang.scale.emailer.emailer { EmailAttachment }
+import from jaclang.scale.emailer.emailer { Emailer, EmailAttachment }
 
-emailer.send_email(
-    to_addr="guest@example.com",
-    subject="Your tickets",
-    body_text="Your tickets are attached.",
-    body_html='<p>Show this at the door:</p><img src="cid:ticket-1">',
-    reply_to="Box Office <boxoffice@example.com>",
-    attachments=[
-        EmailAttachment(
-            filename="ticket-1.png",
-            content=qr_png,
-            mime_type="image/png",
-            content_id="ticket-1"
-        ),
-        EmailAttachment(
-            filename="receipt.pdf", content=receipt_pdf, mime_type="application/pdf"
-        )
-    ]
-);
+def send_tickets(emailer: Emailer, qr_png: bytes, receipt_pdf: bytes) -> bool {
+    return emailer.send_email(
+        to_addr="guest@example.com",
+        subject="Your tickets",
+        body_text="Your tickets are attached.",
+        body_html='<p>Show this at the door:</p><img src="cid:ticket-1">',
+        reply_to="Box Office <boxoffice@example.com>",
+        attachments=[
+            EmailAttachment(
+                filename="ticket-1.png",
+                content=qr_png,
+                mime_type="image/png",
+                content_id="ticket-1"
+            ),
+            EmailAttachment(
+                filename="receipt.pdf", content=receipt_pdf, mime_type="application/pdf"
+            )
+        ]
+    );
+}
 ```
 
 | `EmailAttachment` field | Description | Default |
