@@ -80,15 +80,15 @@ obj SendGridEmailer(Emailer) {
             msg.reply_to = ReplyTo(reply_to);
         }
         for att in attachments or [] {
+            cid = att.bare_content_id();
+            inline = bool(cid and body_html);
             msg.add_attachment(
                 Attachment(
                     FileContent(base64.b64encode(att.content).decode('ascii')),
                     FileName(att.filename),
-                    FileType(att.mime_type),
-                    Disposition(
-                        'inline' if att.content_id and body_html else 'attachment'
-                    ),
-                    ContentId(att.content_id) if att.content_id and body_html else None
+                    FileType(att.media_type()),
+                    Disposition('inline' if inline else 'attachment'),
+                    ContentId(cid) if inline else None
                 )
             );
         }

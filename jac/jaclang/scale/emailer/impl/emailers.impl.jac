@@ -30,10 +30,10 @@ impl SMTPEmailer.send_email(
         logger.error("SMTPEmailer: no from_address configured");
         return False;
     }
-    msg = self._build_message(
-        sender, to_addr, subject, body_text, body_html, reply_to, attachments or []
-    );
     try {
+        msg = self._build_message(
+            sender, to_addr, subject, body_text, body_html, reply_to, attachments or []
+        );
         with smtplib.SMTP(self.host, self.port, timeout=self.timeout) as smtp {
             smtp.ehlo();
             if self.use_tls {
@@ -48,7 +48,7 @@ impl SMTPEmailer.send_email(
         logger.debug("SMTPEmailer: sent mail to %s", to_addr);
         return True;
     } except Exception as e {
-        logger.error("SMTPEmailer: failed to send to %s: %s", to_addr, e);
+        logger.error("SMTPEmailer: failed to send to %r: %s", to_addr, e);
         return False;
     }
 }
@@ -75,13 +75,14 @@ impl SMTPEmailer._build_message(
     }
     html_part = msg.get_body(preferencelist=('html', ));
     for att in attachments {
-        (maintype, _, subtype) = att.mime_type.partition('/');
-        if att.content_id and html_part is not None {
+        (maintype, _, subtype) = att.media_type().partition('/');
+        cid = att.bare_content_id();
+        if cid and html_part is not None {
             html_part.add_related(
                 att.content,
                 maintype=maintype,
                 subtype=subtype,
-                cid=f"<{att.content_id}>",
+                cid=f"<{cid}>",
                 filename=att.filename,
                 disposition='inline'
             );

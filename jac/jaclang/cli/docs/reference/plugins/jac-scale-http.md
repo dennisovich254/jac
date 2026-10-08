@@ -1100,8 +1100,10 @@ def send_tickets(emailer: Emailer, qr_png: bytes, receipt_pdf: bytes) -> bool {
 |-------------------------|-------------|---------|
 | `filename` | The file's name as the recipient sees it | required |
 | `content` | The file's bytes | required |
-| `mime_type` | Its type, e.g. `image/png` | `application/octet-stream` |
-| `content_id` | Shows the file inside the HTML body as `cid:<content_id>` | `None` (attached) |
+| `mime_type` | Its type, e.g. `image/png`. Parameters such as `; charset=utf-8` are dropped, and a value that isn't `type/subtype` is sent as `application/octet-stream` (`media_type()` gives the type sent). | `application/octet-stream` |
+| `content_id` | Shows the file inside the HTML body as `cid:<content_id>`. Given with or without angle brackets (`qr-1` or `<qr-1>`); `bare_content_id()` gives it without. | `None` (attached) |
+
+A header value with a line break (the recipient, subject, `reply_to` or an attachment's filename) is refused: the SMTP emailer's `send_email` returns `False`, as for any failed send.
 
 A custom emailer's `send_email` must accept both parameters.
 
